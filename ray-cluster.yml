@@ -1,0 +1,49 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-ml-cluster
+  namespace: default
+spec:
+  rayVersion: '2.59.0'
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        containers:
+          - name: ray-head
+            image: rayproject/ray:2.59.0
+            # Alignment Fix: Allow automatic network downloading if missing from cluster cache!
+            imagePullPolicy: IfNotPresent
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+            resources:
+              requests:
+                cpu: "200m"
+                memory: "256Mi"
+              limits:
+                cpu: "400m"
+                memory: "518Mi"
+  workerGroupSpecs:
+    - groupName: worker-gpu-group
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 2
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+            - name: ray-worker
+              image: rayproject/ray:2.59.0
+              # Alignment Fix: Allow worker pods to pull base image from registry if missing!
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  cpu: "200m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "400m"
+                  memory: "518Mi"

@@ -1,0 +1,33 @@
+services:
+  node-1:
+    build: .
+    container_name: compose-node-1
+    volumes:
+      - .:/app/host-logs
+    networks:
+      - cluster-net
+    restart: always
+
+  node-2:
+    build: .
+    container_name: compose-node-2
+    volumes:
+      - .:/app/host-logs
+    networks:
+      - cluster-net
+    restart: always
+
+  gateway:
+    image: nginx:alpine
+    container_name: nginx-gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - cluster-net
+    restart: always
+
+networks:
+  cluster-net:
+    driver: bridge

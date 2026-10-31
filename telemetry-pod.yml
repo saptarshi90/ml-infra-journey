@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: telemetry-api-pod
+  labels:
+    app: telemetry
+spec:
+  containers:
+    - name: telemetry-container
+      image: ml-infra-journey-node-1:latest
+      imagePullPolicy: Never
+      ports:
+        - containerPort: 80

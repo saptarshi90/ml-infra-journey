@@ -1,0 +1,3 @@
+pwd:shows current location
+-ls -la : lists all files including the hidden ones
+-Successfully mapped local network port loopback using localhost:8000

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-serving-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-serving
+  template:
+    metadata:
+      labels:
+        app: model-serving
+    spec:
+      containers:
+        - name: serving-container
+          image: ml-serving-gateway-mesh:v6.1
+          imagePullPolicy: Never
+          command: ["uvicorn", "metric_logger_v2:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - containerPort: 8000
+              name: vllm-port
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: VLLM_SERVICE_URL
+              value: "http://vllm-service:8000/predict"
+            - name: TARGET_VLLM_URL
+              value: "http://vllm-service:8000/predict"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.default.svc.cluster.local"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-serving-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: model-serving
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

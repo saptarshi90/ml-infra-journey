@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry-api-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telemetry
+  template:
+    metadata:
+      labels:
+        app: telemetry
+    spec:
+      containers:
+        - name: telemetry-container
+          image: ml-infra-journey-node-1:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80

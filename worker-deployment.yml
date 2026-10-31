@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-worker-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: background-worker
+  template:
+    metadata:
+      labels:
+        app: background-worker
+    spec:
+      containers:
+        - name: worker-container
+          image: ml-infra-journey-node-1:latest
+          imagePullPolicy: Never
+          command: ["python3", "worker.py"]
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-service.default.svc.cluster.local"
+            # The Magic Fix: Force Python logs to stream live without buffering
+            - name: PYTHONUNBUFFERED
+              value: "1"
