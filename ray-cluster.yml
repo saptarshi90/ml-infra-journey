@@ -7,26 +7,25 @@ spec:
   rayVersion: '2.59.0'
   headGroupSpec:
     rayStartParams:
-      dashboard-host: '0.0.0.0'
+      dashboard-host: '127.0.0.1'
     template:
       spec:
         containers:
           - name: ray-head
             image: rayproject/ray:2.59.0
-            # Alignment Fix: Allow automatic network downloading if missing from cluster cache!
             imagePullPolicy: IfNotPresent
+            # Optimization Fix: Forcefully block the 9 heavy UI subprocess modules from booting!
+            command: ["ray", "start", "--head", "--port=6379", "--dashboard=false", "--block"]
             ports:
               - containerPort: 6379
                 name: gcs
-              - containerPort: 8265
-                name: dashboard
             resources:
               requests:
                 cpu: "200m"
                 memory: "256Mi"
               limits:
                 cpu: "400m"
-                memory: "518Mi"
+                memory: "512Mi"
   workerGroupSpecs:
     - groupName: worker-gpu-group
       replicas: 1
@@ -38,7 +37,6 @@ spec:
           containers:
             - name: ray-worker
               image: rayproject/ray:2.59.0
-              # Alignment Fix: Allow worker pods to pull base image from registry if missing!
               imagePullPolicy: IfNotPresent
               resources:
                 requests:
@@ -46,4 +44,4 @@ spec:
                   memory: "256Mi"
                 limits:
                   cpu: "400m"
-                  memory: "518Mi"
+                  memory: "512Mi"
