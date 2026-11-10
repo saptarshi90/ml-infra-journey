@@ -1,60 +1,81 @@
-import os
 import ray
 import time
+import numpy as np
 
-# Initialize a localized Ray core compute engine inside the execution thread
+# Connect directly to your lightweight, running native host cluster instance
 if not ray.is_initialized():
-    print("⚡ [RAY CORE] Initializing distributed execution runtime plane...")
-    ray.init(logging_level="info")
+    ray.init(address="auto", logging_level="error")
 
-# Define a distributed Ray Actor representing an isolated virtual GPU worker node
+# --- STATEFUL VIRTUAL HARDWARE ALLOCATOR ACTOR ---
 @ray.remote
-class GPUWorkerNode:
-    def __init__(self, worker_id: int, vram_blocks: int):
-        self.worker_id = worker_id
-        self.vram_blocks = vram_blocks
-        print(f"📦 [WORKER #{self.worker_id}] Virtual GPU Worker initialized with {self.vram_blocks} PagedAttention memory slots.")
+class GPUClusterResourceRegistry:
+    def __init__(self, total_gpus: int):
+        # Dictionary tracking the allocation state of each GPU slot (True = Busy, False = Free)
+        self.gpu_matrix = {f"cuda:{i}": False for i in range(total_gpus)}
+        print(f"🏗️ [HARDWARE REGISTRY] Initialized cluster matrix topology with {total_gpus} Virtual GPU slots.")
 
-    def compute_tensor_slice(self, prompt_tokens: int, weight_shard_id: int):
-        # Calculate PagedAttention block needs for this specific partition slice
-        required_blocks = (prompt_tokens + 3) // 4
-        time.sleep(0.1)  # Simulate localized CUDA kernel execution latency
+    def lease_gpu_slot(self, worker_id: int):
+        """Surgically isolates and locks down the first available free GPU slot."""
+        for gpu_id, is_busy in self.gpu_matrix.items():
+            if not is_busy:
+                self.gpu_matrix[gpu_id] = True
+                return gpu_id
+        return None  # Starvation State: All devices busy!
+
+    def release_gpu_slot(self, gpu_id: str):
+        """Releases the leased GPU slot register back to the open resource pool."""
+        if gpu_id in self.gpu_matrix:
+            self.gpu_matrix[gpu_id] = False
+            return f"🔄 [REGISTRY] Released device {gpu_id} back to cluster pool."
+        return "⚠️ Invalid device release request."
+
+# --- STATELESS PARALLEL TRAINING WORKER TASK ---
+@ray.remote
+def execute_parallel_model_step(worker_id: int, registry_actor_ref, matrix_size: int):
+    """Worker task that acquires a hardware lease, runs a compute step, and releases it."""
+    # 1. Asynchronously request a dedicated hardware slot allocation lease
+    assigned_device = ray.get(registry_actor_ref.lease_gpu_slot.remote(worker_id))
+    
+    if not assigned_device:
+        return f"❌ [WORKER {worker_id}] Blocked by Resource Starvation! No GPU slots available."
         
-        return {
-            "worker_id": self.worker_id,
-            "weight_shard_processed": weight_shard_id,
-            "allocated_blocks": required_blocks,
-            "status": "PARTITION_COMPUTE_SUCCESS"
-        }
-
-def execute_tensor_parallel_inference():
-    print("\n🚀 [ORCHESTRATOR] Initializing Tensor Parallelism (TP=2) across split worker matrix...")
-    
-    # 1. Spin up two distinct GPU worker actors inside the distributed object store
-    worker_1 = GPUWorkerNode.remote(worker_id=0, vram_blocks=16)
-    worker_2 = GPUWorkerNode.remote(worker_id=1, vram_blocks=16)
-    
-    # Mock inference prompt length (12 words)
-    prompt_tokens = 12
-    
-    print("📡 [SCANCE GRID] Broadcasting weight shard operations to worker nodes concurrently...")
     start_time = time.time()
+    print(f"📡 [WORKER {worker_id}] Successfully leased hardware lane: {assigned_device} | Commencing training step math...")
     
-    # 2. Fire concurrent remote method invocations (Returns Ray Object References)
-    ref_worker_1 = worker_1.compute_tensor_slice.remote(prompt_tokens, weight_shard_id=101)
-    ref_worker_2 = worker_2.compute_tensor_slice.remote(prompt_tokens, weight_shard_id=102)
+    # Simulate heavy backprop gradient matrix math
+    mock_gradients = np.random.randn(matrix_size, matrix_size)
+    _ = np.linalg.inv(mock_gradients @ mock_gradients.T)
+    time.sleep(0.2)  # Simulate execution latency
     
-    # 3. Resolve and gather the distributed object states out of the cluster memory pool
-    results = ray.get([ref_worker_1, ref_worker_2])
-    duration = time.time() - start_time
+    compute_time = (time.time() - start_time) * 1000
     
-    print(f"🏁 [ORCHESTRATOR] Distributed computation resolved in {duration:.4f}s!")
-    print("\n--- DISTRIBUTED TELEMETRY RESULTS ---")
-    for block in results:
-        print(f"🔹 Worker {block['worker_id']} processed Shard {block['weight_shard_processed']} using {block['allocated_blocks']} blocks. Status: {block['status']}")
-    print("-------------------------------------\n")
+    # 2. Release the hardware slot register lease back to the pool
+    release_confirmation = ray.get(registry_actor_ref.release_gpu_slot.remote(assigned_device))
+    
+    return f"⚡ [WORKER {worker_id}] Completed epoch on {assigned_device} in {compute_time:.2f}ms | {release_confirmation}"
+
+def run_process_allocator_emulator():
+    print("🚀 [ORCHESTRATOR] Initializing Multi-GPU Parallel Training Process Allocator Loop...")
+    
+    # 1. Spawn a stateful virtual hardware registry tracking 4 virtual GPU accelerator channels
+    hardware_registry = GPUClusterResourceRegistry.remote(total_gpus=4)
+    
+    # 2. Launch 6 concurrent parallel model training workers simultaneously to test race conditions!
+    print("\n🎛️ Spawning 6 concurrent training worker tasks across the 4-slot cluster topology...")
+    worker_refs = [
+        execute_parallel_model_step.remote(worker_id=i, registry_actor_ref=hardware_registry, matrix_size=500)
+        for i in range(6)
+    ]
+    
+    # 3. Resolve the execution and scheduling metrics from the distributed grid
+    print("⏳ Resolving allocation and compute timelines out of memory lanes...")
+    allocation_reports = ray.get(worker_refs)
+    
+    print("\n🏆 --- PROCESS ALLOCATION & TRAFFIC TIMELINE REPORT ---")
+    for report in allocation_reports:
+        print(report)
+        
+    print("\n🏁 [ORCHESTRATOR] Multi-GPU Process Allocation Emulator Complete with Flawless Resource Isolation.")
 
 if __name__ == "__main__":
-    execute_tensor_parallel_inference()
-    # Cleanly release Ray resources upon execution completion
-    ray.shutdown()
+    run_process_allocator_emulator()
