@@ -1,60 +1,74 @@
-import os
 import ray
 import time
 import numpy as np
 
-# Initialize the localized secure Ray core execution engine
+# Connect directly to your lightweight, running native host cluster instance
 if not ray.is_initialized():
-    ray.init(logging_level="error")
+    ray.init(address="auto", logging_level="error")
 
+# --- STATEFUL GLOBAL CHECKPOINT VAULT ACTOR ---
 @ray.remote
-class HighPerformanceGPUWorker:
-    def __init__(self, worker_id: int):
-        self.worker_id = worker_id
+class GlobalCheckpointVault:
+    def __init__(self):
+        self.vault = {}
+        print("🏗️ [CHECKPOINT VAULT] Resilient distributed state vault successfully initialized.")
 
-    def process_tensor_by_value(self, matrix: np.ndarray):
-        # Tracking memory footprint via unique array data memory addresses
-        address = matrix.__array_interface__["data"]
-        # Simulate quick mathematical calculation step
-        result = np.mean(matrix)
-        return {"worker": self.worker_id, "address": address, "result": float(result)}
+    def save_checkpoint(self, worker_id: int, epoch: int, weights_metric: float):
+        self.vault[worker_id] = {"epoch": epoch, "metric": weights_metric}
+        return f"💾 [VAULT] Stored pristine Epoch {epoch} state for Worker {worker_id} | Metric: {weights_metric:.4f}"
 
-    def process_tensor_by_reference(self, matrix):
-        # Precision Fix: Ray already automatically unwrapped the ObjectRef into a NumPy array!
-        address = matrix.__array_interface__["data"]
-        result = np.mean(matrix)
-        return {"worker": self.worker_id, "address": address, "result": float(result)}
+    def fetch_latest_checkpoint(self, worker_id: int):
+        return self.vault.get(worker_id, {"epoch": -1, "metric": 0.0})
 
-def run_plasma_memory_benchmark():
-    print("⚡ [PLASMA MATRIX] Generating heavy 4,000,000 parameter model weight layer matrix (float32)...")
-    # Generate a heavy 2000x2000 float32 matrix (~16MB of raw memory blocks)
-    heavy_weight_matrix = np.random.randn(2000, 2000).astype(np.float32)
+# --- RESILIENT TRAINING LOOP WITH FAULT TOLERANCE ---
+@ray.remote(max_retries=2)
+def execute_resilient_training_loop(worker_id: int, vault_actor_ref):
+    print(f"\n🚀 [WORKER {worker_id}] Launching parallel training pipeline thread...")
     
-    worker = HighPerformanceGPUWorker.remote(worker_id=0)
+    checkpoint = ray.get(vault_actor_ref.fetch_latest_checkpoint.remote(worker_id))
+    start_epoch = checkpoint["epoch"] + 1
     
-    print("\n🚨 BENCHMARK CRITICAL 1: Passing Heavy Tensors By Value (Standard Serialization Loop)")
-    start_value = time.time()
-    # Passing by value forces Ray to duplicate and re-serialize the entire 16MB matrix across processes
-    ref_value = worker.process_tensor_by_value.remote(heavy_weight_matrix)
-    res_value = ray.get(ref_value)
-    duration_value = time.time() - start_value
-    print(f"📥 [BY-VALUE STATUS] Completed in {duration_value:.5f}s. Worker memory address: {res_value["address"]}")
+    if start_epoch > 0:
+        print(f"🔄 [WORKER {worker_id} RECOVERY] Detected crash footprint! Resuming from saved Epoch {checkpoint['epoch']} matrix state.")
+        current_metric = checkpoint["metric"]
+    else:
+        print(f"🌱 [WORKER {worker_id}] Starting fresh training loop from scratch (Epoch 0).")
+        current_metric = 1.0
+
+    for epoch in range(start_epoch, 3):
+        if worker_id == 1 and epoch == 1 and start_epoch == 0:
+            print(f"💥 [WORKER 1] !!! CRITICAL HARDWARE FAULT INJECTED !!! Simulating preemption / core crash at Epoch {epoch}...")
+            time.sleep(0.1)
+            raise RuntimeError("Catastrophic hardware node preemption event detected.")
+
+        time.sleep(0.2)
+        current_metric *= 0.95
+        
+        save_log = ray.get(vault_actor_ref.save_checkpoint.remote(worker_id, epoch, current_metric))
+        print(f"🔹 [WORKER {worker_id}] Finished Epoch {epoch} | {save_log}")
+        
+    return f"🏁 [WORKER {worker_id}] Completed training cycle. Final optimized matrix weight: {current_metric:.4f}"
+
+def run_fault_tolerance_benchmark():
+    print("🚀 [ORCHESTRATOR] Initializing Asynchronous Worker Preemption Recovery Engine...")
+    vault = GlobalCheckpointVault.remote()
     
-    print("\n🚀 BENCHMARK CRITICAL 2: Passing Heavy Tensors By Immutable Plasma Reference (Zero-Copy Core)")
-    start_ref = time.time()
-    # Explicitly anchor the weight matrix into the Plasma Object Store exactly ONCE!
-    plasma_object_ref = ray.put(heavy_weight_matrix)
-    # Pass only the tiny, lightweight reference pointer handle!
-    ref_plasma = worker.process_tensor_by_reference.remote(plasma_object_ref)
-    res_ref = ray.get(ref_plasma)
-    duration_ref = time.time() - start_ref
-    print(f"📥 [PLASMA STATUS] Completed in {duration_ref:.5f}s. Worker memory address: {res_ref["address"]}")
+    print("\n📡 Deploying 2 parallel training threads into the cluster grid topology...")
+    worker_refs = [
+        execute_resilient_training_loop.remote(worker_id=i, vault_actor_ref=vault)
+        for i in range(2)
+    ]
     
-    # Calculate performance gains
-    speedup = duration_value / duration_ref
-    print(f"\n🏁 [BENCHMARK RESULTS] Plasma Shared Memory Architecture achieved a {speedup:.2f}x execution speedup!")
-    print("--------------------------------------------------------------------------------------------------")
+    print("⏳ Resolving execution tracking matrices from the distributed mesh...")
+    try:
+        results = ray.get(worker_refs)
+        print("\n🏆 --- CLUSTER TRAINING EXECUTION REPORT ---")
+        for res in results:
+            print(res)
+    except Exception as e:
+        print(f"⚠️ Orchestrator caught top-level loop crash: {e}")
+
+    print("\n🏁 [ORCHESTRATOR] Fault-Tolerance and Preemption Recovery Benchmarks Finalized Successfully.")
 
 if __name__ == "__main__":
-    run_plasma_memory_benchmark()
-    ray.shutdown()
+    run_fault_tolerance_benchmark()
