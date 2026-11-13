@@ -1,0 +1,55 @@
+{
+  "title": "Distributed Ring AllReduce & Interconnect Telemetry",
+  "uid": "ray-ring-allreduce-v1",
+  "tags": ["ml-infra", "nccl", "ray", "hpc"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Instantaneous Ring Link Throughput (MB/s)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "ray_ring_link_throughput_mbps",
+          "legendFormat": "Link Bandwidth (MB/s)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "MBs",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "green", "value": 40 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Rolling Gradient Data Plane Rate (Bytes/sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(ray_ring_allreduce_bytes_total[1m])",
+          "legendFormat": "AllReduce Byte Velocity",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      }
+    }
+  ]
+}
